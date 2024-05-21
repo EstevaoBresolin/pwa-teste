@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IndexedDB Example</title>
+    <link rel="manifest" href="/manifest.json">
+    <link rel="icon" href="/images/icon192x192.png">
+    <meta name="theme-color" content="#000000">
+</head>
+<body>
+    <h1>Lista de Produtos</h1>
+    <ul id="productsList"></ul>
+    
+    <h2>Adicionar Produto</h2>
+    <form id="addProductForm">
+        <label for="productId">ID:</label>
+        <input type="number" id="productId" name="productId" required>
+        <br>
+        <label for="productName">Nome:</label>
+        <input type="text" id="productName" name="productName" required>
+        <br>
+        <label for="productPrice">Preço:</label>
+        <input type="number" id="productPrice" name="productPrice" step="0.01" required>
+        <br>
+        <button type="submit">Adicionar Produto</button>
+    </form>
+
+    <button onclick="onLine()">ONLINE?</button>
+    
+    <script>
+        // Função para verificar se está online
+        function onLine() {
+            let online = navigator.onLine;
+            alert(online);
+        }
+
+        let db;
+
+        // Abrir (ou criar) um banco de dados
+        const request = indexedDB.open('myDatabase', 1);
+
+        request.onupgradeneeded = function(event) {
+            db = event.target.result;
+            if (!db.objectStoreNames.contains('products')) {
+                db.createObjectStore('products', { keyPath: 'id' });
+            }
+        };
+
+        request.onsuccess = function(event) {
+            db = event.target.result;
+            console.log('IndexedDB aberto com sucesso.');
+            // Listar todos os produtos após a abertura bem-sucedida
+            getAllProducts();
+        };
+
+        request.onerror = function(event) {
+            console.error('Erro ao abrir IndexedDB:', event.target.errorCode);
+        };
+
+        // Função para adicionar um produto
+        function addProduct(product) {
+            const transaction = db.transaction(['products'], 'readwrite');
+            const objectStore = transaction.objectStore('products');
+            const request = objectStore.add(product);
+
+            request.onsuccess = function(event) {
+                console.log('Produto adicionado com sucesso:', product);
+                getAllProducts(); // Atualizar a lista de produtos
+            };
+
+            request.onerror = function(event) {
+                console.error('Erro ao adicionar produto:', event.target.errorCode);
+            };
+        }
+
+        // Função para recuperar e exibir todos os produtos
+        function getAllProducts() {
+            const transaction = db.transaction(['products'], 'readonly');
+            const objectStore = transaction.objectStore('products');
+            const products = [];
+
+            objectStore.openCursor().onsuccess = function(event) {
+                const cursor = event.target.result;
+                if (cursor) {
+                    products.push(cursor.value);
+                    cursor.continue();
+                } else {
+                    console.log('Todos os produtos:', products);
+                    displayProducts(products);
+                }
+            };
+
+            objectStore.openCursor().onerror = function(event) {
+                console.error('Erro ao listar produtos:', event.target.errorCode);
+            };
+        }
+
+        // Função para exibir produtos no HTML
+        function displayProducts(products) {
+            const productsList = document.getElementById('productsList');
+            productsList.innerHTML = ''; // Limpar lista existente
+
+            products.forEach(product => {
+                const productItem = document.createElement('li');
+                productItem.textContent = `ID: ${product.id}, Nome: ${product.name}, Preço: ${product.price}`;
+                productsList.appendChild(productItem);
+            });
+        }
+
+        // Adicionar evento de submit ao formulário para adicionar produtos
+        document.getElementById('addProductForm').addEventListener('submit', function(event) {
+            event.preventDefault();
+            const id = document.getElementById('productId').value;
+            const name = document.getElementById('productName').value;
+            const price = document.getElementById('productPrice').value;
+            const product = { id: parseInt(id), name: name, price: parseFloat(price) };
+            addProduct(product);
+            // Limpar formulário após adicionar o produto
+            event.target.reset();
+        });
+        
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/service-worker.js')
+                .then(registration => {
+                    console.log('ServiceWorker registrado com sucesso:', registration);
+                }).catch(error => {
+                    console.log('Falha ao registrar o ServiceWorker:', error);
+                });
+            });
+        }
+    </script>
+</body>
+</html>
